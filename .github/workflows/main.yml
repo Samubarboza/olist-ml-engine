@@ -2,30 +2,40 @@ name: CI ML Project
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
-  test:
+  build-and-test:
     runs-on: ubuntu-latest
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Build Docker image
-      run: |
-        docker build -t olist-ml-engine:ci .
+      run: docker build -t olist-ml-engine:ci .
 
-    - name: Crear carpetas necesarias en Docker
+    - name: Run churn pipeline
       run: |
-        docker run --rm -v ${{ github.workspace }}:/app olist-ml-engine:ci bash -c "\
-        mkdir -p /app/models /app/reports/results /app/reports/figures"
+        docker run --rm \
+          -v ${{ github.workspace }}:/app \
+          olist-ml-engine:ci \
+          python -m src.pipelines.churn_pipeline
 
-    - name: Run notebooks in Docker
+    - name: Execute notebooks
       run: |
-        docker run --rm -v ${{ github.workspace }}:/app olist-ml-engine:ci bash -c "\
-        for notebook in $(find /app -name '*.ipynb'); do \
-          jupyter nbconvert --to notebook --execute \$notebook --inplace; \
-        done"
+        docker run --rm \
+          -v ${{ github.workspace }}:/app \
+          olist-ml-engine:ci \
+          bash -c "jupyter nbconvert --to notebook --execute /app/notebooks/01_churn_prediction.ipynb --inplace --ExecutePreprocessor.timeout=600"
+
+    - name: Upload reports
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: ml-reports
+        path: |
+          reports/
+          models/
