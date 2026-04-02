@@ -6,3 +6,5 @@ seaborn
 jupyter
 notebook
 nltk
+joblib
+nbconvert
