@@ -18,6 +18,11 @@ jobs:
       run: |
         docker build -t olist-ml-engine:ci .
 
+    - name: Crear carpetas necesarias en Docker
+      run: |
+        docker run --rm -v ${{ github.workspace }}:/app olist-ml-engine:ci bash -c "\
+        mkdir -p /app/models /app/reports/results /app/reports/figures"
+
     - name: Run notebooks in Docker
       run: |
         docker run --rm -v ${{ github.workspace }}:/app olist-ml-engine:ci bash -c "\
