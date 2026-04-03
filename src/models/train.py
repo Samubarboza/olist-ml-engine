@@ -4,7 +4,8 @@ import pandas as pd
 from sklearn.linear_model import LogisticRegression
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
-from sklearn.svm import SVC
+from sklearn.svm import LinearSVC
+from sklearn.calibration import CalibratedClassifierCV
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.naive_bayes import GaussianNB
 from sklearn.model_selection import cross_validate, StratifiedKFold
@@ -16,7 +17,7 @@ CHURN_MODELS = {
     "DecisionTree": DecisionTreeClassifier(random_state=RANDOM_STATE),
     "RandomForest": RandomForestClassifier(random_state=RANDOM_STATE),
     "GradientBoosting": GradientBoostingClassifier(random_state=RANDOM_STATE),
-    "SVM": SVC(probability=True, random_state=RANDOM_STATE),
+    "SVM": CalibratedClassifierCV(LinearSVC(max_iter=2000, random_state=RANDOM_STATE)),
     "KNN": KNeighborsClassifier(),
     "NaiveBayes": GaussianNB()
 }

@@ -1,49 +1,83 @@
-from src.data.load_data import load_csv
-from src.data.preprocess import clean_missing
-from src.data.split import split_dataset
-from src.features.feature_engineering import create_features
-from src.models.train import train_models
-from src.evaluation.evaluate import evaluate_all_models
-from src.evaluation.visualize import plot_model_metrics
-from src.config.settings import DATA_PROCESSED, MODELS_DIR, RESULTS_DIR, FIGURES_DIR
 import os
+from src.data.preprocess import build_churn_dataset
+from src.features.feature_engineering import create_churn_features
+from src.data.split import split_dataset
+from src.models.train import train_and_validate
+from src.evaluation.evaluate import evaluate_all_models, get_feature_importance
+from src.evaluation.visualize import (
+    plot_metrics_comparison,
+    plot_confusion_matrices,
+    plot_roc_curves,
+    plot_feature_importance,
+    plot_cv_results
+)
+from src.config.settings import DATA_PROCESSED, MODELS_DIR, RESULTS_DIR, FIGURES_DIR
+
 
 def run_churn_pipeline():
-    # cargar datos
-    raw_data = load_csv("customers.csv")
+    """
+    Pipeline completo de prediccion de churn.
+    Construye dataset, crea features, entrena modelos con cross-validation,
+    evalua en test set y genera visualizaciones.
+    """
+    print("=" * 60)
+    print("PIPELINE DE PREDICCION DE CHURN")
+    print("=" * 60)
 
-    # limpiar datos
-    clean_data = clean_missing(raw_data)
+    # paso 1: construir dataset de churn desde datos raw
+    print("\n[1/6] Construyendo dataset de churn...")
+    churn_data = build_churn_dataset()
 
-    # crear features
-    features, target = create_features(clean_data, target_column="churn")
+    os.makedirs(DATA_PROCESSED, exist_ok=True)
+    churn_data.to_csv(os.path.join(DATA_PROCESSED, "churn_data.csv"), index=False)
+    print(f"  Dataset: {churn_data.shape[0]} clientes, {churn_data.shape[1]} columnas")
+    print(f"  Tasa de churn: {churn_data['churn'].mean():.2%}")
 
-    # guardar dataset procesado
-    os.makedirs("data/processed", exist_ok=True)
-    processed_df = features.copy()
-    processed_df["churn"] = target
-    processed_df.to_csv("data/processed/churn_data.csv", index=False)
+    # paso 2: crear features
+    print("\n[2/6] Creando features...")
+    features, target, feature_names = create_churn_features(churn_data)
+    print(f"  Features: {features.shape[1]} variables")
 
-    # dividir dataset
+    # paso 3: dividir dataset
+    print("\n[3/6] Dividiendo dataset (80/20, stratified)...")
     X_train, X_test, y_train, y_test = split_dataset(features, target)
+    print(f"  Train: {X_train.shape[0]} muestras")
+    print(f"  Test: {X_test.shape[0]} muestras")
 
-    # entrenar modelos y calcular métricas
-    trained_models, results = train_models(
-        X_train, y_train,
-        X_test=X_test,
-        y_test=y_test,
-        save_models=True,
-        models_dir=MODELS_DIR
+    # paso 4: entrenar y validar con cross-validation
+    print("\n[4/6] Entrenando modelos con cross-validation...")
+    trained_models, cv_results = train_and_validate(X_train, y_train)
+
+    os.makedirs(RESULTS_DIR, exist_ok=True)
+    cv_results.to_csv(os.path.join(RESULTS_DIR, "churn_cv_results.csv"))
+
+    # paso 5: evaluar en test set
+    print("\n[5/6] Evaluando modelos en test set...")
+    metrics_df, confusion_matrices, reports, predictions, probabilities = evaluate_all_models(
+        trained_models, X_test, y_test,
+        output_csv=os.path.join(RESULTS_DIR, "churn_metrics.csv")
     )
 
-    # guardar métricas
-    os.makedirs(RESULTS_DIR, exist_ok=True)
-    metrics_csv_path = os.path.join(RESULTS_DIR, "churn_metrics.csv")
-    evaluate_all_models(X_test, y_test, models_folder=MODELS_DIR, output_csv=metrics_csv_path)
+    # paso 6: generar visualizaciones
+    print("\n[6/6] Generando visualizaciones...")
+    plot_metrics_comparison(metrics_df)
+    plot_confusion_matrices(confusion_matrices)
+    plot_roc_curves(trained_models, X_test, y_test)
+    plot_cv_results(cv_results)
 
-    # generar gráficas automáticamente
-    os.makedirs(FIGURES_DIR, exist_ok=True)
-    plot_model_metrics(metrics_csv=metrics_csv_path)
+    importance_data = get_feature_importance(trained_models, feature_names)
+    if importance_data:
+        plot_feature_importance(importance_data)
 
-    print("Churn pipeline finished successfully.")
-    return trained_models, results
+    print("\n" + "=" * 60)
+    print("PIPELINE COMPLETADO")
+    print(f"  Modelos guardados en: {MODELS_DIR}")
+    print(f"  Resultados en: {RESULTS_DIR}")
+    print(f"  Graficas en: {FIGURES_DIR}")
+    print("=" * 60)
+
+    return trained_models, metrics_df, cv_results
+
+
+if __name__ == "__main__":
+    run_churn_pipeline()

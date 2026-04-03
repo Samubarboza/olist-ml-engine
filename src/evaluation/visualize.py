@@ -25,7 +25,7 @@ def plot_metrics_comparison(metrics_df, output_dir=None):
         sns.barplot(data=df, x="Model", y=metric, ax=ax, color="steelblue")
         ax.set_title(f"{metric.capitalize()} por modelo")
         ax.set_ylabel(metric.capitalize())
-        ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha="right")
+        ax.tick_params(axis="x", rotation=45)
         ax.set_ylim(0, 1)
         for container in ax.containers:
             ax.bar_label(container, fmt="%.3f", fontsize=8)
