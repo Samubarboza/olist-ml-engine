@@ -8,3 +8,4 @@ notebook
 nltk
 joblib
 nbconvert
+streamlit

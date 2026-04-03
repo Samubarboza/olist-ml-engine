@@ -2,7 +2,6 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Instala dependencias básicas
 RUN apt-get update && apt-get install -y \
     build-essential \
     git \
@@ -13,10 +12,8 @@ COPY requirements.txt .
 RUN pip install --upgrade pip
 RUN pip install -r requirements.txt
 
-# Montaje del proyecto
 COPY . .
 
-# Puerto para notebooks
-EXPOSE 8888
+EXPOSE 8501 8888
 
-CMD ["jupyter", "notebook", "--ip=0.0.0.0", "--allow-root", "--no-browser"]
+CMD ["streamlit", "run", "app.py", "--server.address=0.0.0.0", "--server.port=8501"]
