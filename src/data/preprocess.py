@@ -152,3 +152,82 @@ def clean_missing(df):
             df[col] = df[col].fillna("unknown")
 
     return df
+
+
+def build_product_dataset():
+    """
+    Construye dataset a nivel de producto con metricas de venta, reviews y atributos fisicos.
+    Solo incluye productos vendidos en ordenes entregadas.
+    """
+    products = load_csv("olist_products_dataset.csv")
+    order_items = load_csv("olist_order_items_dataset.csv")
+    orders = load_csv("olist_orders_dataset.csv")
+    reviews = load_csv("olist_order_reviews_dataset.csv")
+    translations = load_csv("product_category_name_translation.csv")
+    translations.columns = translations.columns.str.replace("\ufeff", "")
+
+    # solo items de ordenes entregadas
+    delivered_orders = orders[orders["order_status"] == "delivered"][["order_id"]]
+    delivered_items = order_items.merge(delivered_orders, on="order_id")
+
+    # metricas de venta por producto
+    sales = delivered_items.groupby("product_id").agg(
+        avg_price=("price", "mean"),
+        total_revenue=("price", "sum"),
+        avg_freight=("freight_value", "mean"),
+        total_orders=("order_id", "nunique"),
+        total_items_sold=("price", "count")
+    ).reset_index()
+
+    # reviews por producto
+    item_reviews = delivered_items[["order_id", "product_id"]].merge(
+        reviews[["order_id", "review_score"]], on="order_id"
+    )
+    product_reviews = item_reviews.groupby("product_id").agg(
+        avg_review_score=("review_score", "mean"),
+        review_count=("review_score", "count")
+    ).reset_index()
+
+    # merge con atributos fisicos del producto
+    product_data = products.merge(sales, on="product_id", how="inner")
+    product_data = product_data.merge(product_reviews, on="product_id", how="left")
+
+    # traducir categorias a ingles
+    product_data = product_data.merge(translations, on="product_category_name", how="left")
+    product_data["category"] = product_data["product_category_name_english"].fillna(
+        product_data["product_category_name"]
+    )
+    product_data = product_data.drop(
+        columns=["product_category_name", "product_category_name_english"]
+    )
+
+    product_data = clean_missing(product_data)
+    return product_data
+
+
+def build_customer_product_history():
+    """
+    Construye historial de compras por cliente: que productos y categorias compro.
+    """
+    customers = load_csv("olist_customers_dataset.csv")
+    orders = load_csv("olist_orders_dataset.csv")
+    order_items = load_csv("olist_order_items_dataset.csv")
+    products = load_csv("olist_products_dataset.csv")
+    translations = load_csv("product_category_name_translation.csv")
+    translations.columns = translations.columns.str.replace("\ufeff", "")
+
+    delivered = orders[orders["order_status"] == "delivered"][["order_id", "customer_id"]]
+
+    history = (
+        delivered
+        .merge(customers[["customer_id", "customer_unique_id"]], on="customer_id")
+        .merge(order_items[["order_id", "product_id", "price"]], on="order_id")
+        .merge(products[["product_id", "product_category_name"]], on="product_id", how="left")
+        .merge(translations, on="product_category_name", how="left")
+    )
+
+    history["category"] = history["product_category_name_english"].fillna(
+        history["product_category_name"]
+    )
+
+    return history[["customer_unique_id", "product_id", "category", "price"]]

@@ -50,3 +50,54 @@ def apply_pca(X, n_components=10):
     pca_columns = [f"PC{i+1}" for i in range(n_components)]
     pca_df = pd.DataFrame(pca_values, columns=pca_columns, index=X.index)
     return pca_df, pca
+
+
+def create_product_features(df):
+    """
+    Escala las features numericas del dataset de productos para clustering.
+    Excluye product_id y category (son identificadores, no features).
+    """
+    exclude = ["product_id", "category", "cluster"]
+    columns_to_drop = [c for c in exclude if c in df.columns]
+    features = df.drop(columns=columns_to_drop)
+
+    numeric_columns = features.select_dtypes(include="number").columns.tolist()
+
+    scaler = StandardScaler()
+    scaled_values = scaler.fit_transform(features[numeric_columns])
+    scaled_df = pd.DataFrame(scaled_values, columns=numeric_columns, index=features.index)
+
+    return scaled_df, numeric_columns
+
+
+def create_recommendation_features(product_data):
+    """
+    Crea features de clustering para productos usando:
+    - categoria del producto (one-hot encoding)
+    - precio
+    - reviews
+    - popularidad / demanda
+    """
+    numeric_columns = [
+        "avg_price",
+        "avg_review_score",
+        "review_count",
+        "total_orders",
+        "total_revenue",
+        "total_items_sold",
+        "avg_freight",
+    ]
+    numeric_columns = [column for column in numeric_columns if column in product_data.columns]
+
+    numeric_input = product_data[["product_id", "category"] + numeric_columns].copy()
+    scaled_numeric, _ = create_product_features(numeric_input)
+
+    encoder = OneHotEncoder(sparse_output=False, handle_unknown="ignore")
+    encoded_values = encoder.fit_transform(product_data[["category"]].fillna("unknown"))
+    encoded_names = encoder.get_feature_names_out(["category"])
+    encoded_df = pd.DataFrame(encoded_values, columns=encoded_names, index=product_data.index)
+
+    clustering_features = pd.concat([scaled_numeric, encoded_df], axis=1)
+    feature_names = clustering_features.columns.tolist()
+
+    return clustering_features, feature_names
